@@ -146,8 +146,7 @@ class request(object):
             raise AssertionError("Failed to read entire body: %r" % body)
         elif data:
             raise AssertionError("Read beyond expected body: %r" % data)
-        data = req.body.read(sizes())
-        if data:
+        if data := req.body.read(sizes()):
             raise AssertionError("Read after body finished: %r" % data)
 
     def match_readline(self, req, body, sizes):
@@ -168,8 +167,7 @@ class request(object):
             raise AssertionError("Failed to read entire body: %r" % body)
         elif data:
             raise AssertionError("Read beyond expected body: %r" % data)
-        data = req.body.readline(sizes())
-        if data:
+        if data := req.body.readline(sizes()):
             raise AssertionError("Read data after body finished: %r" % data)
 
     def match_readlines(self, req, body, sizes):
@@ -186,8 +184,7 @@ class request(object):
             body = body[len(line):]
         if body:
             raise AssertionError("Failed to read entire body: %r" % body)
-        data = req.body.readlines(sizes())
-        if data:
+        if data := req.body.readlines(sizes()):
             raise AssertionError("Read data after body finished: %r" % data)
 
     def match_iter(self, req, body, sizes):
@@ -215,6 +212,7 @@ class request(object):
     def gen_cases(self, cfg):
         def get_funs(p):
             return [v for k, v in inspect.getmembers(self) if k.startswith(p)]
+
         senders = get_funs("send_")
         sizers = get_funs("size_")
         matchers = get_funs("match_")
@@ -238,7 +236,8 @@ class request(object):
 
             def test_req(sn, sz, mt):
                 self.check(cfg, sn, sz, mt)
-            desc = "%s: MT: %s SZ: %s SN: %s" % (self.name, mtn, szn, snn)
+
+            desc = f"{self.name}: MT: {mtn} SZ: {szn} SN: {snn}"
             test_req.description = desc
             ret.append((test_req, sn, sz, mt))
         return ret

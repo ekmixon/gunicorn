@@ -16,11 +16,10 @@ class MemoryWatch(threading.Thread):
 
     def memory_usage(self, pid):
         try:
-            out = commands.getoutput("ps -o rss -p %s" % pid)
+            out = commands.getoutput(f"ps -o rss -p {pid}")
         except IOError:
             return -1
-        used_mem = sum(int(x) for x in out.split('\n')[1:])
-        return used_mem
+        return sum(int(x) for x in out.split('\n')[1:])
 
     def run(self):
         while True:

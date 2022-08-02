@@ -214,14 +214,13 @@ class Request(Message):
             idx = data.find(b"\r\n\r\n")
             done = data[:2] == b"\r\n"
 
-            if idx < 0 and not done:
-                self.get_data(unreader, buf)
-                data = buf.getvalue()
-                if len(data) > self.max_buffer_headers:
-                    raise LimitRequestHeaders("max buffer headers")
-            else:
+            if idx >= 0 or done:
                 break
 
+            self.get_data(unreader, buf)
+            data = buf.getvalue()
+            if len(data) > self.max_buffer_headers:
+                raise LimitRequestHeaders("max buffer headers")
         if done:
             self.unreader.unread(data[2:])
             return b""
@@ -309,10 +308,10 @@ class Request(Message):
             s_port = int(bits[4])
             d_port = int(bits[5])
         except ValueError:
-            raise InvalidProxyLine("invalid port %s" % line)
+            raise InvalidProxyLine(f"invalid port {line}")
 
         if not ((0 <= s_port <= 65535) and (0 <= d_port <= 65535)):
-            raise InvalidProxyLine("invalid port %s" % line)
+            raise InvalidProxyLine(f"invalid port {line}")
 
         # Set data
         self.proxy_protocol_info = {

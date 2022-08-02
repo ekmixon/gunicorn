@@ -52,10 +52,7 @@ class WSGIApplication(Application):
         return get_wsgi_app(self.app_uri, defaults=self.cfg.paste_global_conf)
 
     def load(self):
-        if self.cfg.paste is not None:
-            return self.load_pasteapp()
-        else:
-            return self.load_wsgiapp()
+        return self.load_wsgiapp() if self.cfg.paste is None else self.load_pasteapp()
 
 
 def run():

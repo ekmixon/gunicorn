@@ -125,7 +125,7 @@ class Arbiter(object):
 
         if 'GUNICORN_PID' in os.environ:
             self.master_pid = int(os.environ.get('GUNICORN_PID'))
-            self.proc_name = self.proc_name + ".2"
+            self.proc_name = f"{self.proc_name}.2"
             self.master_name = "Master.2"
 
         self.pid = os.getpid()
@@ -141,17 +141,13 @@ class Arbiter(object):
 
         if not self.LISTENERS:
             fds = None
-            listen_fds = systemd.listen_fds()
-            if listen_fds:
+            if listen_fds := systemd.listen_fds():
                 self.systemd = True
                 fds = range(systemd.SD_LISTEN_FDS_START,
                             systemd.SD_LISTEN_FDS_START + listen_fds)
 
             elif self.master_pid:
-                fds = []
-                for fd in os.environ.pop('GUNICORN_FD').split(','):
-                    fds.append(int(fd))
-
+                fds = [int(fd) for fd in os.environ.pop('GUNICORN_FD').split(',')]
             self.LISTENERS = sock.create_sockets(self.cfg, self.log, fds)
 
         listeners_str = ",".join([str(l) for l in self.LISTENERS])
@@ -196,7 +192,7 @@ class Arbiter(object):
     def run(self):
         "Main master loop."
         self.start()
-        util._setproctitle("master [%s]" % self.proc_name)
+        util._setproctitle(f"master [{self.proc_name}]")
 
         try:
             self.manage_workers()
@@ -216,7 +212,7 @@ class Arbiter(object):
                     continue
 
                 signame = self.SIG_NAMES.get(sig)
-                handler = getattr(self, "handle_%s" % signame, None)
+                handler = getattr(self, f"handle_{signame}", None)
                 if not handler:
                     self.log.error("Unhandled signal: %s", signame)
                     continue
@@ -325,7 +321,7 @@ class Arbiter(object):
             if self.pidfile is not None:
                 self.pidfile.rename(self.cfg.pidfile)
             # reset proctitle
-            util._setproctitle("master [%s]" % self.proc_name)
+            util._setproctitle(f"master [{self.proc_name}]")
 
     def wakeup(self):
         """\
@@ -474,7 +470,7 @@ class Arbiter(object):
             self.pidfile.create(self.pid)
 
         # set new proc_name
-        util._setproctitle("master [%s]" % self.proc_name)
+        util._setproctitle(f"master [{self.proc_name}]")
 
         # spawn new workers
         for _ in range(self.cfg.workers):
@@ -583,7 +579,7 @@ class Arbiter(object):
         # Process Child
         worker.pid = os.getpid()
         try:
-            util._setproctitle("worker [%s]" % self.proc_name)
+            util._setproctitle(f"worker [{self.proc_name}]")
             self.log.info("Booting worker with pid: %s", worker.pid)
             self.cfg.post_fork(self, worker)
             worker.init_process()
@@ -593,7 +589,7 @@ class Arbiter(object):
         except AppImportError as e:
             self.log.debug("Exception while loading the application",
                            exc_info=True)
-            print("%s" % e, file=sys.stderr)
+            print(f"{e}", file=sys.stderr)
             sys.stderr.flush()
             sys.exit(self.APP_LOAD_ERROR)
         except Exception:

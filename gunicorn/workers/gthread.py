@@ -267,9 +267,7 @@ class ThreadWorker(base.Worker):
             if not req:
                 return (False, conn)
 
-            # handle the request
-            keepalive = self.handle_request(req, conn)
-            if keepalive:
+            if keepalive := self.handle_request(req, conn):
                 return (keepalive, conn)
         except http.errors.NoMoreData as e:
             self.log.debug("Ignored premature client disconnection. %s", e)
@@ -287,13 +285,12 @@ class ThreadWorker(base.Worker):
         except EnvironmentError as e:
             if e.errno not in (errno.EPIPE, errno.ECONNRESET, errno.ENOTCONN):
                 self.log.exception("Socket error processing request.")
+            elif e.errno == errno.ECONNRESET:
+                self.log.debug("Ignoring connection reset")
+            elif e.errno == errno.ENOTCONN:
+                self.log.debug("Ignoring socket not connected")
             else:
-                if e.errno == errno.ECONNRESET:
-                    self.log.debug("Ignoring connection reset")
-                elif e.errno == errno.ENOTCONN:
-                    self.log.debug("Ignoring socket not connected")
-                else:
-                    self.log.debug("Ignoring connection epipe")
+                self.log.debug("Ignoring connection epipe")
         except Exception as e:
             self.handle_error(req, conn.sock, conn.client, e)
 

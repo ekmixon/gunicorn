@@ -57,13 +57,13 @@ class Config(object):
         for k in sorted(self.settings):
             v = self.settings[k].value
             if callable(v):
-                v = "<{}()>".format(v.__qualname__)
+                v = f"<{v.__qualname__}()>"
             lines.append("{k:{kmax}} = {v}".format(k=k, v=v, kmax=kmax))
         return "\n".join(lines)
 
     def __getattr__(self, name):
         if name not in self.settings:
-            raise AttributeError("No configuration setting for: %s" % name)
+            raise AttributeError(f"No configuration setting for: {name}")
         return self.settings[name].get()
 
     def __setattr__(self, name, value):
@@ -73,7 +73,7 @@ class Config(object):
 
     def set(self, name, value):
         if name not in self.settings:
-            raise AttributeError("No configuration setting for: %s" % name)
+            raise AttributeError(f"No configuration setting for: {name}")
         self.settings[name].set(value)
 
     def get_cmd_args_from_env(self):
@@ -87,10 +87,15 @@ class Config(object):
             "prog": self.prog
         }
         parser = argparse.ArgumentParser(**kwargs)
-        parser.add_argument("-v", "--version",
-                            action="version", default=argparse.SUPPRESS,
-                            version="%(prog)s (version " + __version__ + ")\n",
-                            help="show program's version number and exit")
+        parser.add_argument(
+            "-v",
+            "--version",
+            action="version",
+            default=argparse.SUPPRESS,
+            version=f"%(prog)s (version {__version__}" + ")\n",
+            help="show program's version number and exit",
+        )
+
         parser.add_argument("args", nargs="*", help=argparse.SUPPRESS)
 
         keys = sorted(self.settings, key=self.settings.__getitem__)
@@ -105,9 +110,7 @@ class Config(object):
 
         # are we using a threaded worker?
         is_sync = uri.endswith('SyncWorker') or uri == 'sync'
-        if is_sync and self.threads > 1:
-            return "gthread"
-        return uri
+        return "gthread" if is_sync and self.threads > 1 else uri
 
     @property
     def worker_class(self):
@@ -139,10 +142,7 @@ class Config(object):
     @property
     def proc_name(self):
         pn = self.settings['proc_name'].get()
-        if pn is not None:
-            return pn
-        else:
-            return self.settings['default_proc_name'].get()
+        return pn if pn is not None else self.settings['default_proc_name'].get()
 
     @property
     def logger_class(self):
@@ -153,9 +153,12 @@ class Config(object):
 
         # if default logger is in use, and statsd is on, automagically switch
         # to the statsd logger
-        if uri == LoggerClass.default:
-            if 'statsd_host' in self.settings and self.settings['statsd_host'].value is not None:
-                uri = "gunicorn.instrument.statsd.Statsd"
+        if (
+            uri == LoggerClass.default
+            and 'statsd_host' in self.settings
+            and self.settings['statsd_host'].value is not None
+        ):
+            uri = "gunicorn.instrument.statsd.Statsd"
 
         logger_class = util.load_class(
             uri,
@@ -172,11 +175,11 @@ class Config(object):
 
     @property
     def ssl_options(self):
-        opts = {}
-        for name, value in self.settings.items():
-            if value.section == 'SSL':
-                opts[name] = value.get()
-        return opts
+        return {
+            name: value.get()
+            for name, value in self.settings.items()
+            if value.section == 'SSL'
+        }
 
     @property
     def env(self):
@@ -247,10 +250,10 @@ class SettingMeta(type):
         KNOWN_SETTINGS.append(new_class)
         return new_class
 
-    def fmt_desc(cls, desc):
+    def fmt_desc(self, desc):
         desc = textwrap.dedent(desc).strip()
-        setattr(cls, "desc", desc)
-        setattr(cls, "short", desc.splitlines()[0])
+        setattr(self, "desc", desc)
+        setattr(self, "short", desc.splitlines()[0])
 
 
 class Setting(object):
@@ -277,7 +280,7 @@ class Setting(object):
             return
         args = tuple(self.cli)
 
-        help_txt = "%s [%s]" % (self.short, self.default)
+        help_txt = f"{self.short} [{self.default}]"
         help_txt = help_txt.replace("%", "%%")
 
         kwargs = {
@@ -310,7 +313,7 @@ class Setting(object):
 
     def set(self, val):
         if not callable(self.validator):
-            raise TypeError('Invalid validator: %s' % self.name)
+            raise TypeError(f'Invalid validator: {self.name}')
         self.value = self.validator(val)
 
     def __lt__(self, other):
@@ -337,36 +340,34 @@ def validate_bool(val):
     if isinstance(val, bool):
         return val
     if not isinstance(val, str):
-        raise TypeError("Invalid type for casting: %s" % val)
+        raise TypeError(f"Invalid type for casting: {val}")
     if val.lower().strip() == "true":
         return True
     elif val.lower().strip() == "false":
         return False
     else:
-        raise ValueError("Invalid boolean: %s" % val)
+        raise ValueError(f"Invalid boolean: {val}")
 
 
 def validate_dict(val):
     if not isinstance(val, dict):
-        raise TypeError("Value is not a dictionary: %s " % val)
+        raise TypeError(f"Value is not a dictionary: {val} ")
     return val
 
 
 def validate_pos_int(val):
-    if not isinstance(val, int):
-        val = int(val, 0)
-    else:
-        # Booleans are ints!
-        val = int(val)
+    val = int(val) if isinstance(val, int) else int(val, 0)
     if val < 0:
-        raise ValueError("Value must be positive: %s" % val)
+        raise ValueError(f"Value must be positive: {val}")
     return val
 
 
 def validate_ssl_version(val):
-    ssl_versions = {}
-    for protocol in [p for p in dir(ssl) if p.startswith("PROTOCOL_")]:
-        ssl_versions[protocol[9:]] = getattr(ssl, protocol)
+    ssl_versions = {
+        protocol[9:]: getattr(ssl, protocol)
+        for protocol in [p for p in dir(ssl) if p.startswith("PROTOCOL_")]
+    }
+
     if val in ssl_versions:
         # string matching PROTOCOL_...
         return ssl_versions[val]
@@ -381,15 +382,16 @@ def validate_ssl_version(val):
         # drop this in favour of the more descriptive ValueError below
         pass
 
-    raise ValueError("Invalid ssl_version: %s. Valid options: %s"
-                     % (val, ', '.join(ssl_versions)))
+    raise ValueError(
+        f"Invalid ssl_version: {val}. Valid options: {', '.join(ssl_versions)}"
+    )
 
 
 def validate_string(val):
     if val is None:
         return None
     if not isinstance(val, str):
-        raise TypeError("Not a string: %s" % val)
+        raise TypeError(f"Not a string: {val}")
     return val.strip()
 
 
@@ -397,7 +399,7 @@ def validate_file_exists(val):
     if val is None:
         return None
     if not os.path.exists(val):
-        raise ValueError("File %s does not exists." % val)
+        raise ValueError(f"File {val} does not exists.")
     return val
 
 
@@ -419,18 +421,13 @@ def validate_list_of_existing_files(val):
 def validate_string_to_list(val):
     val = validate_string(val)
 
-    if not val:
-        return []
-
-    return [v.strip() for v in val.split(",") if v]
+    return [v.strip() for v in val.split(",") if v] if val else []
 
 
 def validate_class(val):
     if inspect.isfunction(val) or inspect.ismethod(val):
         val = val()
-    if inspect.isclass(val):
-        return val
-    return validate_string(val)
+    return val if inspect.isclass(val) else validate_string(val)
 
 
 def validate_callable(arity):
@@ -450,10 +447,11 @@ def validate_callable(arity):
                 raise TypeError("Can not load '%s' from '%s'"
                     "" % (obj_name, mod_name))
         if not callable(val):
-            raise TypeError("Value is not callable: %s" % val)
-        if arity != -1 and arity != util.get_arity(val):
-            raise TypeError("Value must have an arity of: %s" % arity)
+            raise TypeError(f"Value is not callable: {val}")
+        if arity not in [-1, util.get_arity(val)]:
+            raise TypeError(f"Value must have an arity of: {arity}")
         return val
+
     return _validate_callable
 
 
@@ -535,9 +533,7 @@ def validate_reload_engine(val):
 def get_default_config_file():
     config_path = os.path.join(os.path.abspath(os.getcwd()),
                                'gunicorn.conf.py')
-    if os.path.exists(config_path):
-        return config_path
-    return None
+    return config_path if os.path.exists(config_path) else None
 
 
 class ConfigFile(Setting):
@@ -1714,7 +1710,7 @@ class OnStarting(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def on_starting(server):
+    def on_starting(self):
         pass
     default = staticmethod(on_starting)
     desc = """\
@@ -1730,7 +1726,7 @@ class OnReload(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def on_reload(server):
+    def on_reload(self):
         pass
     default = staticmethod(on_reload)
     desc = """\
@@ -1746,7 +1742,7 @@ class WhenReady(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def when_ready(server):
+    def when_ready(self):
         pass
     default = staticmethod(when_ready)
     desc = """\
@@ -1762,7 +1758,7 @@ class Prefork(Setting):
     validator = validate_callable(2)
     type = callable
 
-    def pre_fork(server, worker):
+    def pre_fork(self, worker):
         pass
     default = staticmethod(pre_fork)
     desc = """\
@@ -1779,7 +1775,7 @@ class Postfork(Setting):
     validator = validate_callable(2)
     type = callable
 
-    def post_fork(server, worker):
+    def post_fork(self, worker):
         pass
     default = staticmethod(post_fork)
     desc = """\
@@ -1796,7 +1792,7 @@ class PostWorkerInit(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def post_worker_init(worker):
+    def post_worker_init(self):
         pass
 
     default = staticmethod(post_worker_init)
@@ -1814,7 +1810,7 @@ class WorkerInt(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def worker_int(worker):
+    def worker_int(self):
         pass
 
     default = staticmethod(worker_int)
@@ -1832,7 +1828,7 @@ class WorkerAbort(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def worker_abort(worker):
+    def worker_abort(self):
         pass
 
     default = staticmethod(worker_abort)
@@ -1852,7 +1848,7 @@ class PreExec(Setting):
     validator = validate_callable(1)
     type = callable
 
-    def pre_exec(server):
+    def pre_exec(self):
         pass
     default = staticmethod(pre_exec)
     desc = """\
@@ -1868,8 +1864,8 @@ class PreRequest(Setting):
     validator = validate_callable(2)
     type = callable
 
-    def pre_request(worker, req):
-        worker.log.debug("%s %s" % (req.method, req.path))
+    def pre_request(self, req):
+        self.log.debug(f"{req.method} {req.path}")
     default = staticmethod(pre_request)
     desc = """\
         Called just before a worker processes the request.
@@ -1885,7 +1881,7 @@ class PostRequest(Setting):
     validator = validate_post_request
     type = callable
 
-    def post_request(worker, req, environ, resp):
+    def post_request(self, req, environ, resp):
         pass
     default = staticmethod(post_request)
     desc = """\
@@ -1902,7 +1898,7 @@ class ChildExit(Setting):
     validator = validate_callable(2)
     type = callable
 
-    def child_exit(server, worker):
+    def child_exit(self, worker):
         pass
     default = staticmethod(child_exit)
     desc = """\
@@ -1921,7 +1917,7 @@ class WorkerExit(Setting):
     validator = validate_callable(2)
     type = callable
 
-    def worker_exit(server, worker):
+    def worker_exit(self, worker):
         pass
     default = staticmethod(worker_exit)
     desc = """\
@@ -1938,7 +1934,7 @@ class NumWorkersChanged(Setting):
     validator = validate_callable(3)
     type = callable
 
-    def nworkers_changed(server, new_value, old_value):
+    def nworkers_changed(self, new_value, old_value):
         pass
     default = staticmethod(nworkers_changed)
     desc = """\
@@ -1957,7 +1953,7 @@ class OnExit(Setting):
     section = "Server Hooks"
     validator = validate_callable(1)
 
-    def on_exit(server):
+    def on_exit(self):
         pass
 
     default = staticmethod(on_exit)

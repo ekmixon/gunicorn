@@ -32,12 +32,13 @@ class WebSocketWSGI(object):
         spaces = re.subn(" ", "", key_value)[1]
         if key_number % spaces != 0:
             return
-        part = key_number / spaces
-        return part
+        return key_number / spaces
 
     def __call__(self, environ, start_response):
-        if not (environ.get('HTTP_CONNECTION').find('Upgrade') != -1 and
-            environ['HTTP_UPGRADE'].lower() == 'websocket'):
+        if (
+            environ.get('HTTP_CONNECTION').find('Upgrade') == -1
+            or environ['HTTP_UPGRADE'].lower() != 'websocket'
+        ):
             # need to check a few more things here for true compliance
             start_response('400 Bad Request', [('Connection','close')])
             return []
@@ -52,17 +53,16 @@ class WebSocketWSGI(object):
                    "Upgrade: websocket\r\n"
                    "Connection: Upgrade\r\n")
 
-        key = environ.get('HTTP_SEC_WEBSOCKET_KEY')
-        if key:
+        if key := environ.get('HTTP_SEC_WEBSOCKET_KEY'):
             ws_key = base64.b64decode(key)
             if len(ws_key) != 16:
                 start_response('400 Bad Request', [('Connection','close')])
                 return []
 
-            protocols = []
             subprotocols = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL')
             ws_protocols = []
             if subprotocols:
+                protocols = []
                 for s in subprotocols.split(','):
                     s = s.strip()
                     if s in protocols:
@@ -70,10 +70,10 @@ class WebSocketWSGI(object):
             if ws_protocols:
                 handshake_reply += 'Sec-WebSocket-Protocol: %s\r\n' % ', '.join(ws_protocols)
 
-            exts = []
             extensions = environ.get('HTTP_SEC_WEBSOCKET_EXTENSIONS')
             ws_extensions = []
             if extensions:
+                exts = []
                 for ext in extensions.split(','):
                     ext = ext.strip()
                     if ext in exts:
@@ -99,7 +99,6 @@ class WebSocketWSGI(object):
                 ))
 
         else:
-
             handshake_reply += (
                        "WebSocket-Origin: %s\r\n"
                        "WebSocket-Location: ws://%s%s\r\n\r\n" % (
@@ -167,18 +166,14 @@ class WebSocket(object):
             0x9 - ping
             0xA - pong
         """
-        if base64:
-            buf = b64encode(buf)
-        else:
-            buf = buf.encode()
-
+        buf = b64encode(buf) if base64 else buf.encode()
         b1 = 0x80 | (opcode & 0x0f) # FIN + opcode
         payload_len = len(buf)
         if payload_len <= 125:
             header = struct.pack('>BB', b1, payload_len)
-        elif payload_len > 125 and payload_len < 65536:
+        elif payload_len < 65536:
             header = struct.pack('>BBH', b1, 126, payload_len)
-        elif payload_len >= 65536:
+        else:
             header = struct.pack('>BBQ', b1, 127, payload_len)
 
         #print("Encoded: %s" % repr(header + buf))
@@ -200,18 +195,18 @@ class WebSocket(object):
              'close_reason' : string}
         """
 
-        f = {'fin'          : 0,
-             'opcode'       : 0,
-             'mask'         : 0,
-             'hlen'         : 2,
-             'length'       : 0,
-             'payload'      : None,
-             'left'         : 0,
-             'close_code'   : None,
-             'close_reason' : None}
-
         blen = len(buf)
-        f['left'] = blen
+        f = {
+            'fin': 0,
+            'opcode': 0,
+            'mask': 0,
+            'hlen': 2,
+            'length': 0,
+            'payload': None,
+            'close_code': None,
+            'close_reason': None,
+            'left': blen,
+        }
 
         if blen < f['hlen']:
             return f # Incomplete frame header
@@ -251,7 +246,7 @@ class WebSocket(object):
                 data = struct.unpack('<I', buf[f['hlen']:f['hlen']+4])[0]
                 of1 = f['hlen']+4
                 b = ''
-                for i in range(0, int(f['length']/4)):
+                for i in range(int(f['length']/4)):
                     mask = struct.unpack('<I', buf[of1+4*i:of1+4*(i+1)])[0]
                     b += struct.pack('I', data ^ mask)
 
@@ -260,22 +255,21 @@ class WebSocket(object):
                 of1 = f['hlen']
                 of2 = full_len - l
                 c = ''
-                for i in range(0, l):
+                for i in range(l):
                     mask = struct.unpack('B', buf[of1 + i])[0]
                     data = struct.unpack('B', buf[of2 + i])[0]
                     c += chr(data ^ mask)
 
             f['payload'] = b + c
         else:
-            print("Unmasked frame: %s" % repr(buf))
+            print(f"Unmasked frame: {repr(buf)}")
             f['payload'] = buf[(f['hlen'] + has_mask * 4):full_len]
 
         if base64 and f['opcode'] in [1, 2]:
             try:
                 f['payload'] = b64decode(f['payload'])
             except:
-                print("Exception while b64decoding buffer: %s" %
-                        repr(buf))
+                print(f"Exception while b64decoding buffer: {repr(buf)}")
                 raise
 
         if f['opcode'] == 0x08:
@@ -295,8 +289,7 @@ class WebSocket(object):
         """
         if isinstance(message, str):
             message = message.encode('utf-8')
-        packed = "\x00%s\xFF" % message
-        return packed
+        return "\x00%s\xFF" % message
 
     def _parse_messages(self):
         """ Parses for messages in the buffer *buf*.  It is assumed that
@@ -311,25 +304,16 @@ class WebSocket(object):
         while buf:
             if self.version in ['7', '8', '13']:
                 frame = self.decode_hybi(buf, base64=False)
-                #print("Received buf: %s, frame: %s" % (repr(buf), frame))
-
-                if frame['payload'] == None:
+                if frame['payload'] is None:
+                    break
+                if frame['opcode'] == 0x8: # connection close
+                    self.websocket_closed = True
                     break
                 else:
-                    if frame['opcode'] == 0x8: # connection close
-                        self.websocket_closed = True
-                        break
-                    #elif frame['opcode'] == 0x1:
-                    else:
-                        msgs.append(frame['payload']);
+                    msgs.append(frame['payload']);
                         #msgs.append(frame['payload'].decode('utf-8', 'replace'));
                         #buf = buf[-frame['left']:]
-                        if frame['left']:
-                            buf = buf[-frame['left']:]
-                        else:
-                            buf = ''
-
-
+                    buf = buf[-frame['left']:] if frame['left'] else ''
             else:
                 frame_type = ord(buf[0])
                 if frame_type == 0:
@@ -438,13 +422,12 @@ wsapp = WebSocketWSGI(handle)
 def app(environ, start_response):
     """ This resolves to the web page or the websocket depending on
     the path."""
-    if environ['PATH_INFO'] == '/' or environ['PATH_INFO'] == "":
-        data = open(os.path.join(
-                     os.path.dirname(__file__),
-                     'websocket.html')).read()
-        data = data % environ
-        start_response('200 OK', [('Content-Type', 'text/html'),
-                                 ('Content-Length', str(len(data)))])
-        return [data.encode()]
-    else:
+    if environ['PATH_INFO'] not in ['/', ""]:
         return wsapp(environ, start_response)
+    data = open(os.path.join(
+                 os.path.dirname(__file__),
+                 'websocket.html')).read()
+    data = data % environ
+    start_response('200 OK', [('Content-Type', 'text/html'),
+                             ('Content-Length', str(len(data)))])
+    return [data.encode()]

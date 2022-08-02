@@ -50,7 +50,7 @@ def format_settings(app):
 def fmt_setting(s):
     if callable(s.default):
         val = inspect.getsource(s.default)
-        val = "\n".join("    %s" % line for line in val.splitlines())
+        val = "\n".join(f"    {line}" for line in val.splitlines())
         val = "\n\n.. code-block:: python\n\n" + val
     elif s.default == '':
         val = "``''``"
@@ -58,38 +58,32 @@ def fmt_setting(s):
         val = "``%r``" % s.default
 
     if s.cli and s.meta:
-        cli = " or ".join("``%s %s``" % (arg, s.meta) for arg in s.cli)
+        cli = " or ".join(f"``{arg} {s.meta}``" for arg in s.cli)
     elif s.cli:
-        cli = " or ".join("``%s``" % arg for arg in s.cli)
+        cli = " or ".join(f"``{arg}``" for arg in s.cli)
     else:
         cli = ""
 
-    out = []
-    out.append(".. _%s:\n" % s.name.replace("_", "-"))
-    out.append("``%s``" % s.name)
-    out.append("~" * (len(s.name) + 4))
-    out.append("")
+    out = [".. _%s:\n" % s.name.replace("_", "-")]
+    out.append(f"``{s.name}``")
+    out.extend(("~" * (len(s.name) + 4), ""))
     if s.cli:
-        out.append("**Command line:** %s" % cli)
-        out.append("")
-    out.append("**Default:** %s" % val)
-    out.append("")
-    out.append(s.desc)
-    out.append("")
-    out.append("")
+        out.extend((f"**Command line:** {cli}", ""))
+    out.extend((f"**Default:** {val}", ""))
+    out.extend((s.desc, "", ""))
     return "\n".join(out)
 
 
 def issue_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
     issue = utils.unescape(text)
-    text = 'issue ' + issue
+    text = f'issue {issue}'
     refnode = nodes.reference(text, text, refuri=ISSUE_URI % issue)
     return [refnode], []
 
 
 def pull_request_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
     issue = utils.unescape(text)
-    text = 'pull request ' + issue
+    text = f'pull request {issue}'
     refnode = nodes.reference(text, text, refuri=PULL_REQUEST_URI % issue)
     return [refnode], []
 

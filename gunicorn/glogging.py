@@ -99,22 +99,13 @@ class SafeAtoms(dict):
     def __init__(self, atoms):
         dict.__init__(self)
         for key, value in atoms.items():
-            if isinstance(value, str):
-                self[key] = value.replace('"', '\\"')
-            else:
-                self[key] = value
+            self[key] = value.replace('"', '\\"') if isinstance(value, str) else value
 
     def __getitem__(self, k):
         if k.startswith("{"):
             kl = k.lower()
-            if kl in self:
-                return super().__getitem__(kl)
-            else:
-                return "-"
-        if k in self:
-            return super().__getitem__(k)
-        else:
-            return '-'
+            return super().__getitem__(kl) if kl in self else "-"
+        return super().__getitem__(k) if k in self else '-'
 
 
 def parse_syslog_address(addr):
@@ -241,15 +232,13 @@ class Logger(object):
             ) as exc:
                 raise RuntimeError(str(exc))
         elif cfg.logconfig:
-            if os.path.exists(cfg.logconfig):
-                defaults = CONFIG_DEFAULTS.copy()
-                defaults['__file__'] = cfg.logconfig
-                defaults['here'] = os.path.dirname(cfg.logconfig)
-                fileConfig(cfg.logconfig, defaults=defaults,
-                           disable_existing_loggers=False)
-            else:
-                msg = "Error: log config '%s' not found"
-                raise RuntimeError(msg % cfg.logconfig)
+            if not os.path.exists(cfg.logconfig):
+                raise RuntimeError("Error: log config '%s' not found" % cfg.logconfig)
+            defaults = CONFIG_DEFAULTS.copy()
+            defaults['__file__'] = cfg.logconfig
+            defaults['here'] = os.path.dirname(cfg.logconfig)
+            fileConfig(cfg.logconfig, defaults=defaults,
+                       disable_existing_loggers=False)
 
     def critical(self, msg, *args, **kwargs):
         self.error_log.critical(msg, *args, **kwargs)
@@ -285,9 +274,7 @@ class Logger(object):
             'l': '-',
             'u': self._get_user(environ) or '-',
             't': self.now(),
-            'r': "%s %s %s" % (environ['REQUEST_METHOD'],
-                               environ['RAW_URI'],
-                               environ["SERVER_PROTOCOL"]),
+            'r': f"""{environ['REQUEST_METHOD']} {environ['RAW_URI']} {environ["SERVER_PROTOCOL"]}""",
             's': status,
             'm': environ.get('REQUEST_METHOD'),
             'U': environ.get('PATH_INFO'),
@@ -299,32 +286,30 @@ class Logger(object):
             'a': environ.get('HTTP_USER_AGENT', '-'),
             'T': request_time.seconds,
             'D': (request_time.seconds * 1000000) + request_time.microseconds,
-            'M': (request_time.seconds * 1000) + int(request_time.microseconds/1000),
+            'M': (request_time.seconds * 1000)
+            + int(request_time.microseconds / 1000),
             'L': "%d.%06d" % (request_time.seconds, request_time.microseconds),
-            'p': "<%s>" % os.getpid()
+            'p': f"<{os.getpid()}>",
         }
 
-        # add request headers
-        if hasattr(req, 'headers'):
-            req_headers = req.headers
-        else:
-            req_headers = req
 
+        # add request headers
+        req_headers = req.headers if hasattr(req, 'headers') else req
         if hasattr(req_headers, "items"):
             req_headers = req_headers.items()
 
-        atoms.update({"{%s}i" % k.lower(): v for k, v in req_headers})
+        atoms |= {"{%s}i" % k.lower(): v for k, v in req_headers}
 
         resp_headers = resp.headers
         if hasattr(resp_headers, "items"):
             resp_headers = resp_headers.items()
 
         # add response headers
-        atoms.update({"{%s}o" % k.lower(): v for k, v in resp_headers})
+        atoms |= {"{%s}o" % k.lower(): v for k, v in resp_headers}
 
         # add environ variables
         environ_variables = environ.items()
-        atoms.update({"{%s}e" % k.lower(): v for k, v in environ_variables})
+        atoms |= {"{%s}e" % k.lower(): v for k, v in environ_variables}
 
         return atoms
 
@@ -394,9 +379,7 @@ class Logger(object):
                 return h
 
     def _set_handler(self, log, output, fmt, stream=None):
-        # remove previous gunicorn log handler
-        h = self._get_gunicorn_handler(log)
-        if h:
+        if h := self._get_gunicorn_handler(log):
             log.handlers.remove(h)
 
         if output is not None:
@@ -421,10 +404,10 @@ class Logger(object):
         # setup format
         prefix = cfg.syslog_prefix or cfg.proc_name.replace(":", ".")
 
-        prefix = "gunicorn.%s.%s" % (prefix, name)
+        prefix = f"gunicorn.{prefix}.{name}"
 
         # set format
-        fmt = logging.Formatter(r"%s: %s" % (prefix, fmt))
+        fmt = logging.Formatter(f"{prefix}: {fmt}")
 
         # syslog facility
         try:
@@ -459,6 +442,6 @@ class Logger(object):
                 except (TypeError, binascii.Error, UnicodeDecodeError) as exc:
                     self.debug("Couldn't get username: %s", exc)
                     return user
-                if len(auth) == 2:
-                    user = auth[0]
+            if len(auth) == 2:
+                user = auth[0]
         return user

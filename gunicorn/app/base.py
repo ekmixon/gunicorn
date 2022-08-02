@@ -110,7 +110,7 @@ class Application(BaseApplication):
             sys.modules[module_name] = mod
             spec.loader.exec_module(mod)
         except Exception:
-            print("Failed to read config file: %s" % filename, file=sys.stderr)
+            print(f"Failed to read config file: {filename}", file=sys.stderr)
             traceback.print_exc()
             sys.stderr.flush()
             sys.exit(1)

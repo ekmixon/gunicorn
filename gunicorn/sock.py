@@ -76,11 +76,7 @@ class TCPSocket(BaseSocket):
     FAMILY = socket.AF_INET
 
     def __str__(self):
-        if self.conf.is_ssl:
-            scheme = "https"
-        else:
-            scheme = "http"
-
+        scheme = "https" if self.conf.is_ssl else "http"
         addr = self.sock.getsockname()
         return "%s://%s:%d" % (scheme, addr[0], addr[1])
 
@@ -117,7 +113,7 @@ class UnixSocket(BaseSocket):
         super().__init__(addr, conf, log, fd=fd)
 
     def __str__(self):
-        return "unix:%s" % self.cfg_addr
+        return f"unix:{self.cfg_addr}"
 
     def bind(self, sock):
         old_umask = os.umask(self.conf.umask)
@@ -128,10 +124,7 @@ class UnixSocket(BaseSocket):
 
 def _sock_type(addr):
     if isinstance(addr, tuple):
-        if util.is_ipv6(addr[0]):
-            sock_type = TCP6Socket
-        else:
-            sock_type = TCPSocket
+        sock_type = TCP6Socket if util.is_ipv6(addr[0]) else TCPSocket
     elif isinstance(addr, (str, bytes)):
         sock_type = UnixSocket
     else:

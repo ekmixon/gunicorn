@@ -26,7 +26,7 @@ import gunicorn
 from gunicorn.http.wsgi import base_environ
 from gunicorn.workers.base_async import AsyncWorker
 
-VERSION = "gevent/%s gunicorn/%s" % (gevent.__version__, gunicorn.__version__)
+VERSION = f"gevent/{gevent.__version__} gunicorn/{gunicorn.__version__}"
 
 
 class GeventWorker(AsyncWorker):
@@ -38,10 +38,11 @@ class GeventWorker(AsyncWorker):
         monkey.patch_all()
 
         # patch sockets
-        sockets = []
-        for s in self.sockets:
-            sockets.append(socket.socket(s.FAMILY, socket.SOCK_STREAM,
-                fileno=s.sock.fileno()))
+        sockets = [
+            socket.socket(s.FAMILY, socket.SOCK_STREAM, fileno=s.sock.fileno())
+            for s in self.sockets
+        ]
+
         self.sockets = sockets
 
     def notify(self):
@@ -97,10 +98,10 @@ class GeventWorker(AsyncWorker):
             # Handle current requests until graceful_timeout
             ts = time.time()
             while time.time() - ts <= self.cfg.graceful_timeout:
-                accepting = 0
-                for server in servers:
-                    if server.pool.free_count() != server.pool.size:
-                        accepting += 1
+                accepting = sum(
+                    server.pool.free_count() != server.pool.size
+                    for server in servers
+                )
 
                 # if no server is accepting a connection, we can exit
                 if not accepting:
@@ -110,7 +111,7 @@ class GeventWorker(AsyncWorker):
                 gevent.sleep(1.0)
 
             # Force kill all active the handlers
-            self.log.warning("Worker graceful timeout (pid:%s)" % self.pid)
+            self.log.warning(f"Worker graceful timeout (pid:{self.pid})")
             for server in servers:
                 server.stop(timeout=1)
         except Exception:
@@ -166,10 +167,7 @@ class PyWSGIHandler(pywsgi.WSGIHandler):
         response_time = finish - start
         resp_headers = getattr(self, 'response_headers', {})
         resp = GeventResponse(self.status, resp_headers, self.response_length)
-        if hasattr(self, 'headers'):
-            req_headers = self.headers.items()
-        else:
-            req_headers = []
+        req_headers = self.headers.items() if hasattr(self, 'headers') else []
         self.server.log.access(resp, req_headers, self.environ, response_time)
 
     def get_environ(self):

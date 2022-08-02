@@ -66,7 +66,7 @@ class Statsd(Logger):
         """Log a given statistic if metric, value and type are present
         """
         try:
-            extra = kwargs.get("extra", None)
+            extra = kwargs.get("extra")
             if extra is not None:
                 metric = extra.get(METRIC_VAR, None)
                 value = extra.get(VALUE_VAR, None)
@@ -78,9 +78,6 @@ class Statsd(Logger):
                         self.increment(metric, value)
                     elif typ == HISTOGRAM_TYPE:
                         self.histogram(metric, value)
-                    else:
-                        pass
-
             # Log to parent logger only if there is something to say
             if msg:
                 Logger.log(self, lvl, msg, *args, **kwargs)

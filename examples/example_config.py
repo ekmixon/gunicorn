@@ -209,7 +209,7 @@ def worker_int(worker):
             code.append('File: "%s", line %d, in %s' % (filename,
                 lineno, name))
             if line:
-                code.append("  %s" % (line.strip()))
+                code.append(f"  {line.strip()}")
     worker.log.debug("\n".join(code))
 
 def worker_abort(worker):

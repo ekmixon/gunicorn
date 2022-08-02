@@ -22,7 +22,7 @@ def generate(site_path, special_priorities, directory_index='index.html'):
                     ['git', 'log', '-1', '--pretty="%cI"', absolute_filepath]).decode('ascii').strip('\n"')
                 url_element = ElementTree.SubElement(urlset, 'url')
                 loc_element = ElementTree.SubElement(url_element, 'loc')
-                loc_element.text = 'http://gunicorn.org/' + relative_url
+                loc_element.text = f'http://gunicorn.org/{relative_url}'
                 lastmod_element = ElementTree.SubElement(url_element, 'lastmod')
                 lastmod_element.text = last_modification
                 priority_element = ElementTree.SubElement(url_element, 'priority')
@@ -31,7 +31,7 @@ def generate(site_path, special_priorities, directory_index='index.html'):
                 url_element.text = loc_element.tail = lastmod_element.tail = '\n  '
     # We sort the url nodes instead of the filenames because
     # filenames might be altered by the directory_index option
-    urlset[:] = sorted([url for url in urlset], key=lambda url: url[0].text)
+    urlset[:] = sorted(list(urlset), key=lambda url: url[0].text)
     urlset.tail = urlset[-1].tail = '\n'
     with open(os.path.join(site_path, 'sitemap.xml'), 'wb') as sitemap_file:
         ElementTree.ElementTree(urlset).write(sitemap_file, encoding='UTF-8', xml_declaration=True)

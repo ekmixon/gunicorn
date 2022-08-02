@@ -20,8 +20,7 @@ class Pidfile(object):
         self.pid = None
 
     def create(self, pid):
-        oldpid = self.validate()
-        if oldpid:
+        if oldpid := self.validate():
             if oldpid == os.getpid():
                 return
             msg = "Already running on PID %s (or pid file '%s' is stale)"

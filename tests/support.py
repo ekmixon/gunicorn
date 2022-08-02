@@ -55,9 +55,12 @@ def requires_mac_ver(*min_version):
                     if version < min_version:
                         min_version_txt = '.'.join(map(str, min_version))
                         raise unittest.SkipTest(
-                            "Mac OS X %s or higher required, not %s"
-                            % (min_version_txt, version_txt))
+                            f"Mac OS X {min_version_txt} or higher required, not {version_txt}"
+                        )
+
             return func(*args, **kw)
+
         wrapper.min_version = min_version
         return wrapper
+
     return decorator

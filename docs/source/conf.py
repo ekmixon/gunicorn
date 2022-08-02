@@ -22,7 +22,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'Gunicorn'
-copyright = '2009-%s, Benoit Chesneau' % time.strftime('%Y')
+copyright = f"2009-{time.strftime('%Y')}, Benoit Chesneau"
 # gunicorn version
 import gunicorn
 release = version = gunicorn.__version__

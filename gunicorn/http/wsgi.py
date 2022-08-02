@@ -32,8 +32,7 @@ class FileWrapper(object):
             self.close = filelike.close
 
     def __getitem__(self, key):
-        data = self.filelike.read(self.blksize)
-        if data:
+        if data := self.filelike.read(self.blksize):
             return data
         raise IndexError
 
@@ -52,9 +51,7 @@ class WSGIErrorsWrapper(io.RawIOBase):
             self.streams.append(sys.stderr)
             handlers = handlers[1:]
 
-        for h in handlers:
-            if hasattr(h, "stream"):
-                self.streams.append(h.stream)
+        self.streams.extend(h.stream for h in handlers if hasattr(h, "stream"))
 
     def write(self, data):
         for stream in self.streams:
@@ -80,30 +77,34 @@ def base_environ(cfg):
 
 def default_environ(req, sock, cfg):
     env = base_environ(cfg)
-    env.update({
-        "wsgi.input": req.body,
-        "gunicorn.socket": sock,
-        "REQUEST_METHOD": req.method,
-        "QUERY_STRING": req.query,
-        "RAW_URI": req.uri,
-        "SERVER_PROTOCOL": "HTTP/%s" % ".".join([str(v) for v in req.version])
-    })
+    env.update(
+        {
+            "wsgi.input": req.body,
+            "gunicorn.socket": sock,
+            "REQUEST_METHOD": req.method,
+            "QUERY_STRING": req.query,
+            "RAW_URI": req.uri,
+            "SERVER_PROTOCOL": f'HTTP/{".".join([str(v) for v in req.version])}',
+        }
+    )
+
     return env
 
 
 def proxy_environ(req):
     info = req.proxy_protocol_info
 
-    if not info:
-        return {}
-
-    return {
-        "PROXY_PROTOCOL": info["proxy_protocol"],
-        "REMOTE_ADDR": info["client_addr"],
-        "REMOTE_PORT": str(info["client_port"]),
-        "PROXY_ADDR": info["proxy_addr"],
-        "PROXY_PORT": str(info["proxy_port"]),
-    }
+    return (
+        {
+            "PROXY_PROTOCOL": info["proxy_protocol"],
+            "REMOTE_ADDR": info["client_addr"],
+            "REMOTE_PORT": str(info["client_port"]),
+            "PROXY_ADDR": info["proxy_addr"],
+            "PROXY_PORT": str(info["proxy_port"]),
+        }
+        if info
+        else {}
+    )
 
 
 def create(req, sock, client, server, cfg):
@@ -135,7 +136,7 @@ def create(req, sock, client, server, cfg):
 
         key = 'HTTP_' + hdr_name.replace('-', '_')
         if key in environ:
-            hdr_value = "%s,%s" % (environ[key], hdr_value)
+            hdr_value = f"{environ[key]},{hdr_value}"
         environ[key] = hdr_value
 
     # set the url scheme
@@ -216,9 +217,7 @@ class Response(object):
             return False
         if self.req.method == 'HEAD':
             return False
-        if self.status_code < 200 or self.status_code in (204, 304):
-            return False
-        return True
+        return self.status_code >= 200 and self.status_code not in (204, 304)
 
     def start_response(self, status, headers, exc_info=None):
         if exc_info:

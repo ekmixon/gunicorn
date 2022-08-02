@@ -100,10 +100,10 @@ class ChunkedReader(object):
         return (chunk_size, rest_chunk)
 
     def get_data(self, unreader, buf):
-        data = unreader.read()
-        if not data:
+        if data := unreader.read():
+            buf.write(data)
+        else:
             raise NoMoreData()
-        buf.write(data)
 
 
 class LengthReader(object):
@@ -122,13 +122,10 @@ class LengthReader(object):
             return b""
 
         buf = io.BytesIO()
-        data = self.unreader.read()
-        while data:
+        while data := self.unreader.read():
             buf.write(data)
             if buf.tell() >= size:
                 break
-            data = self.unreader.read()
-
         buf = buf.getvalue()
         ret, rest = buf[:size], buf[size:]
         self.unreader.unread(rest)
@@ -183,10 +180,10 @@ class Body(object):
         return self
 
     def __next__(self):
-        ret = self.readline()
-        if not ret:
+        if ret := self.readline():
+            return ret
+        else:
             raise StopIteration()
-        return ret
 
     next = __next__
 

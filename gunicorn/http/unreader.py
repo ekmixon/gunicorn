@@ -34,8 +34,7 @@ class Unreader(object):
             self.buf = io.BytesIO()
             return ret
         if size is None:
-            d = self.chunk()
-            return d
+            return self.chunk()
 
         while self.buf.tell() < size:
             chunk = self.chunk()

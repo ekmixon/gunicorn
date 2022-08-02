@@ -75,13 +75,12 @@ class AsyncWorker(base.Worker):
         except EnvironmentError as e:
             if e.errno not in (errno.EPIPE, errno.ECONNRESET, errno.ENOTCONN):
                 self.log.exception("Socket error processing request.")
+            elif e.errno == errno.ECONNRESET:
+                self.log.debug("Ignoring connection reset")
+            elif e.errno == errno.ENOTCONN:
+                self.log.debug("Ignoring socket not connected")
             else:
-                if e.errno == errno.ECONNRESET:
-                    self.log.debug("Ignoring connection reset")
-                elif e.errno == errno.ENOTCONN:
-                    self.log.debug("Ignoring socket not connected")
-                else:
-                    self.log.debug("Ignoring EPIPE")
+                self.log.debug("Ignoring EPIPE")
         except Exception as e:
             self.handle_error(req, client, addr, e)
         finally:
@@ -97,10 +96,9 @@ class AsyncWorker(base.Worker):
                                         listener_name, self.cfg)
             environ["wsgi.multithread"] = True
             self.nr += 1
-            if self.nr >= self.max_requests:
-                if self.alive:
-                    self.log.info("Autorestarting worker after current request.")
-                    self.alive = False
+            if self.nr >= self.max_requests and self.alive:
+                self.log.info("Autorestarting worker after current request.")
+                self.alive = False
 
             if not self.alive or not self.cfg.keepalive:
                 resp.force_close()

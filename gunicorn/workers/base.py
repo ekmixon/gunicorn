@@ -64,7 +64,7 @@ class Worker(object):
         self.tmp = WorkerTmp(cfg)
 
     def __str__(self):
-        return "<Worker %s>" % self.pid
+        return f"<Worker {self.pid}>"
 
     def notify(self):
         """\
@@ -224,11 +224,11 @@ class Worker(object):
             elif isinstance(exc, InvalidHTTPVersion):
                 mesg = "Invalid HTTP Version '%s'" % str(exc)
             elif isinstance(exc, (InvalidHeaderName, InvalidHeader,)):
-                mesg = "%s" % str(exc)
+                mesg = f"{str(exc)}"
                 if not req and hasattr(exc, "req"):
                     req = exc.req  # for access log
             elif isinstance(exc, LimitRequestLine):
-                mesg = "%s" % str(exc)
+                mesg = f"{str(exc)}"
             elif isinstance(exc, LimitRequestHeaders):
                 mesg = "Error parsing headers: '%s'" % str(exc)
             elif isinstance(exc, InvalidProxyLine):
@@ -238,7 +238,7 @@ class Worker(object):
                 mesg = "Request forbidden"
                 status_int = 403
             elif isinstance(exc, InvalidSchemeHeaders):
-                mesg = "%s" % str(exc)
+                mesg = f"{str(exc)}"
             elif isinstance(exc, SSLError):
                 reason = "Forbidden"
                 mesg = "'%s'" % str(exc)
@@ -259,7 +259,7 @@ class Worker(object):
             environ['REMOTE_ADDR'] = addr[0]
             environ['REMOTE_PORT'] = str(addr[1])
             resp = Response(req, client, self.cfg)
-            resp.status = "%s %s" % (status_int, reason)
+            resp.status = f"{status_int} {reason}"
             resp.response_length = len(mesg)
             self.log.access(resp, req, environ, request_time)
 

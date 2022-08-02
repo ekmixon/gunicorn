@@ -33,9 +33,11 @@ class Application(object):
 
     def __call__(self, environ, start_response):
         match = self.map.routematch(environ=environ)
-        if not match:
-            return self.error404(environ, start_response)
-        return match[0]['app'](environ, start_response)
+        return (
+            match[0]['app'](environ, start_response)
+            if match
+            else self.error404(environ, start_response)
+        )
 
     def error404(self, environ, start_response):
         html = b"""\

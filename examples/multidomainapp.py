@@ -16,11 +16,10 @@ class SubDomainApp:
         host = host.split(":")[0]  # strip port
 
         for pattern, app in self.mapping:
-            if re.match("^" + pattern + "$", host):
+            if re.match(f"^{pattern}$", host):
                 return app(environ, start_response)
-        else:
-            start_response("404 Not Found", [])
-            return [b""]
+        start_response("404 Not Found", [])
+        return [b""]
 
 def hello(environ, start_response):
     start_response("200 OK", [("Content-Type", "text/plain")])

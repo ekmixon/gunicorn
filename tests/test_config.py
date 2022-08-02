@@ -235,7 +235,7 @@ def test_load_config():
 
 
 def test_load_config_explicit_file():
-    with AltArgs(["prog_name", "-c", "file:%s" % cfg_file()]):
+    with AltArgs(["prog_name", "-c", f"file:{cfg_file()}"]):
         app = NoConfigApp()
     assert app.cfg.bind == ["unix:/tmp/bar/baz"]
     assert app.cfg.workers == 3
@@ -243,7 +243,7 @@ def test_load_config_explicit_file():
 
 
 def test_load_config_module():
-    with AltArgs(["prog_name", "-c", "python:%s" % cfg_module()]):
+    with AltArgs(["prog_name", "-c", f"python:{cfg_module()}"]):
         app = NoConfigApp()
     assert app.cfg.bind == ["unix:/tmp/bar/baz"]
     assert app.cfg.workers == 3
@@ -258,7 +258,7 @@ def test_cli_overrides_config():
 
 
 def test_cli_overrides_config_module():
-    with AltArgs(["prog_name", "-c", "python:%s" % cfg_module(), "-b", "blarney"]):
+    with AltArgs(["prog_name", "-c", f"python:{cfg_module()}", "-b", "blarney"]):
         app = NoConfigApp()
     assert app.cfg.bind == ["blarney"]
     assert app.cfg.proc_name == "fooey"
@@ -332,7 +332,7 @@ class MyLogger(glogging.Logger):
 
 def test_always_use_configured_logger():
     c = config.Config()
-    c.set('logger_class', __name__ + '.MyLogger')
+    c.set('logger_class', f'{__name__}.MyLogger')
     assert c.logger_class == MyLogger
     c.set('statsd_host', 'localhost:12345')
     # still uses custom logger over statsd
@@ -346,7 +346,7 @@ def test_load_enviroment_variables_config(monkeypatch):
     assert app.cfg.workers == 4
 
 def test_config_file_environment_variable(monkeypatch):
-    monkeypatch.setenv("GUNICORN_CMD_ARGS", "--config=" + alt_cfg_file())
+    monkeypatch.setenv("GUNICORN_CMD_ARGS", f"--config={alt_cfg_file()}")
     with AltArgs():
         app = NoConfigApp()
     assert app.cfg.proc_name == "not-fooey"
@@ -503,18 +503,16 @@ def test_str():
         m = re.match(r'^(\w+)\s+= ', line)
         assert m, "Line {} didn't match expected format: {!r}".format(i, line)
 
-        key = m.group(1)
+        key = m[1]
         try:
             s = OUTPUT_MATCH.pop(key)
         except KeyError:
             continue
 
-        line_re = r'^{}\s+= {}$'.format(key, re.escape(s))
+        line_re = f'^{key}\s+= {re.escape(s)}$'
         assert re.match(line_re, line), '{!r} != {!r}'.format(line_re, line)
 
         if not OUTPUT_MATCH:
             break
     else:
-        assert False, 'missing expected setting lines? {}'.format(
-            OUTPUT_MATCH.keys()
-        )
+        assert False, f'missing expected setting lines? {OUTPUT_MATCH.keys()}'

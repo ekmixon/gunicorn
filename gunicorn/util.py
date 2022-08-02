@@ -48,7 +48,7 @@ try:
     from setproctitle import setproctitle
 
     def _setproctitle(title):
-        setproctitle("gunicorn: %s" % title)
+        setproctitle(f"gunicorn: {title}")
 except ImportError:
     def _setproctitle(title):
         pass
@@ -112,13 +112,7 @@ positionals = (
 
 def get_arity(f):
     sig = inspect.signature(f)
-    arity = 0
-
-    for param in sig.parameters.values():
-        if param.kind in positionals:
-            arity += 1
-
-    return arity
+    return sum(param.kind in positionals for param in sig.parameters.values())
 
 
 def get_username(uid):
@@ -184,8 +178,11 @@ if sys.platform.startswith("win"):
             # Increase the timeout and try again
             time.sleep(timeout)
             timeout *= 2
-        warnings.warn('tests may fail, delete still pending for ' + pathname,
-                      RuntimeWarning, stacklevel=4)
+        warnings.warn(
+            f'tests may fail, delete still pending for {pathname}',
+            RuntimeWarning,
+            stacklevel=4,
+        )
 
     def _unlink(filename):
         _waitfor(os.unlink, filename)
@@ -289,14 +286,13 @@ def write(sock, data, chunked=False):
 
 def write_nonblock(sock, data, chunked=False):
     timeout = sock.gettimeout()
-    if timeout != 0.0:
-        try:
-            sock.setblocking(0)
-            return write(sock, data, chunked)
-        finally:
-            sock.setblocking(1)
-    else:
+    if timeout == 0.0:
         return write(sock, data, chunked)
+    try:
+        sock.setblocking(0)
+        return write(sock, data, chunked)
+    finally:
+        sock.setblocking(1)
 
 
 def write_error(sock, status_int, reason, mesg):
@@ -449,8 +445,7 @@ def http_date(timestamp=None):
     """Return the current date and time formatted for a message header."""
     if timestamp is None:
         timestamp = time.time()
-    s = email.utils.formatdate(timestamp, localtime=False, usegmt=True)
-    return s
+    return email.utils.formatdate(timestamp, localtime=False, usegmt=True)
 
 
 def is_hoppish(header):
@@ -462,89 +457,90 @@ def daemonize(enable_stdio_inheritance=False):
     Standard daemonization of a process.
     http://www.svbug.com/documentation/comp.unix.programmer-FAQ/faq_2.html#SEC16
     """
-    if 'GUNICORN_FD' not in os.environ:
-        if os.fork():
-            os._exit(0)
-        os.setsid()
+    if 'GUNICORN_FD' in os.environ:
+        return
+    if os.fork():
+        os._exit(0)
+    os.setsid()
 
-        if os.fork():
-            os._exit(0)
+    if os.fork():
+        os._exit(0)
 
-        os.umask(0o22)
+    os.umask(0o22)
 
-        # In both the following any file descriptors above stdin
-        # stdout and stderr are left untouched. The inheritance
-        # option simply allows one to have output go to a file
-        # specified by way of shell redirection when not wanting
-        # to use --error-log option.
+    # In both the following any file descriptors above stdin
+    # stdout and stderr are left untouched. The inheritance
+    # option simply allows one to have output go to a file
+    # specified by way of shell redirection when not wanting
+    # to use --error-log option.
 
-        if not enable_stdio_inheritance:
-            # Remap all of stdin, stdout and stderr on to
-            # /dev/null. The expectation is that users have
-            # specified the --error-log option.
+    if not enable_stdio_inheritance:
+        # Remap all of stdin, stdout and stderr on to
+        # /dev/null. The expectation is that users have
+        # specified the --error-log option.
 
-            closerange(0, 3)
+        closerange(0, 3)
 
-            fd_null = os.open(REDIRECT_TO, os.O_RDWR)
+        fd_null = os.open(REDIRECT_TO, os.O_RDWR)
 
-            if fd_null != 0:
-                os.dup2(fd_null, 0)
+        if fd_null != 0:
+            os.dup2(fd_null, 0)
 
-            os.dup2(fd_null, 1)
-            os.dup2(fd_null, 2)
+        os.dup2(fd_null, 1)
+        os.dup2(fd_null, 2)
 
-        else:
-            fd_null = os.open(REDIRECT_TO, os.O_RDWR)
+    else:
+        fd_null = os.open(REDIRECT_TO, os.O_RDWR)
 
-            # Always redirect stdin to /dev/null as we would
-            # never expect to need to read interactive input.
+        # Always redirect stdin to /dev/null as we would
+        # never expect to need to read interactive input.
 
-            if fd_null != 0:
-                os.close(0)
-                os.dup2(fd_null, 0)
+        if fd_null != 0:
+            os.close(0)
+            os.dup2(fd_null, 0)
 
-            # If stdout and stderr are still connected to
-            # their original file descriptors we check to see
-            # if they are associated with terminal devices.
-            # When they are we map them to /dev/null so that
-            # are still detached from any controlling terminal
-            # properly. If not we preserve them as they are.
-            #
-            # If stdin and stdout were not hooked up to the
-            # original file descriptors, then all bets are
-            # off and all we can really do is leave them as
-            # they were.
-            #
-            # This will allow 'gunicorn ... > output.log 2>&1'
-            # to work with stdout/stderr going to the file
-            # as expected.
-            #
-            # Note that if using --error-log option, the log
-            # file specified through shell redirection will
-            # only be used up until the log file specified
-            # by the option takes over. As it replaces stdout
-            # and stderr at the file descriptor level, then
-            # anything using stdout or stderr, including having
-            # cached a reference to them, will still work.
+        # If stdout and stderr are still connected to
+        # their original file descriptors we check to see
+        # if they are associated with terminal devices.
+        # When they are we map them to /dev/null so that
+        # are still detached from any controlling terminal
+        # properly. If not we preserve them as they are.
+        #
+        # If stdin and stdout were not hooked up to the
+        # original file descriptors, then all bets are
+        # off and all we can really do is leave them as
+        # they were.
+        #
+        # This will allow 'gunicorn ... > output.log 2>&1'
+        # to work with stdout/stderr going to the file
+        # as expected.
+        #
+        # Note that if using --error-log option, the log
+        # file specified through shell redirection will
+        # only be used up until the log file specified
+        # by the option takes over. As it replaces stdout
+        # and stderr at the file descriptor level, then
+        # anything using stdout or stderr, including having
+        # cached a reference to them, will still work.
 
-            def redirect(stream, fd_expect):
-                try:
-                    fd = stream.fileno()
-                    if fd == fd_expect and stream.isatty():
-                        os.close(fd)
-                        os.dup2(fd_null, fd)
-                except AttributeError:
-                    pass
+        def redirect(stream, fd_expect):
+            try:
+                fd = stream.fileno()
+                if fd == fd_expect and stream.isatty():
+                    os.close(fd)
+                    os.dup2(fd_null, fd)
+            except AttributeError:
+                pass
 
-            redirect(sys.stdout, 1)
-            redirect(sys.stderr, 2)
+        redirect(sys.stdout, 1)
+        redirect(sys.stderr, 2)
 
 
 def seed():
     try:
         random.seed(os.urandom(64))
     except NotImplementedError:
-        random.seed('%s.%s' % (time.time(), os.getpid()))
+        random.seed(f'{time.time()}.{os.getpid()}')
 
 
 def check_is_writeable(path):
@@ -584,8 +580,8 @@ def warn(msg):
     lines = msg.splitlines()
     for i, line in enumerate(lines):
         if i == 0:
-            line = "WARNING: %s" % line
-        print("!!! %s" % line, file=sys.stderr)
+            line = f"WARNING: {line}"
+        print(f"!!! {line}", file=sys.stderr)
 
     print("!!!\n", file=sys.stderr)
     sys.stderr.flush()
@@ -610,7 +606,7 @@ def split_request_uri(uri):
         # relative uri while the RFC says we should consider it as abs_path
         # http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
         # We use temporary dot prefix to workaround this behaviour
-        parts = urllib.parse.urlsplit("." + uri)
+        parts = urllib.parse.urlsplit(f".{uri}")
         return parts._replace(path=parts.path[1:])
 
     return urllib.parse.urlsplit(uri)
@@ -630,9 +626,7 @@ def reraise(tp, value, tb=None):
 
 
 def bytes_to_str(b):
-    if isinstance(b, str):
-        return b
-    return str(b, 'latin1')
+    return b if isinstance(b, str) else str(b, 'latin1')
 
 
 def unquote_to_wsgi_str(string):

@@ -17,7 +17,7 @@ httpfiles = glob.glob(os.path.join(reqdir, "*.http"))
 
 @pytest.mark.parametrize("fname", httpfiles)
 def test_http_parser(fname):
-    env = treq.load_py(os.path.splitext(fname)[0] + ".py")
+    env = treq.load_py(f"{os.path.splitext(fname)[0]}.py")
 
     expect = env['request']
     cfg = env['cfg']
